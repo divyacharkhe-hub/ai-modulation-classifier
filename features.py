@@ -1,68 +1,49 @@
 """
 features.py
 ------------
-Extracts classic Automatic Modulation Classification (AMC) features
-from complex I/Q signal samples. These are the same style of
-higher-order statistical / cumulant features used in real AMC
-research papers, making this project technically credible (not a toy).
+Converts raw I/Q sequences into hand-crafted statistical features that a
+classical ML model (Random Forest / SVM) can use. These features are the
+kind used in real AMC papers: amplitude, phase, and higher-order moments.
 """
 
 import numpy as np
-from scipy.stats import kurtosis
-
-FEATURE_NAMES = [
-    "mean_amplitude", "std_amplitude", "kurtosis_amplitude",
-    "mean_phase", "std_phase", "std_inst_freq",
-    "M2", "M4", "M6",
-    "C20", "C40", "C42",
-    "papr", "zero_crossing_rate",
-]
 
 
-def extract_features(iq_samples: np.ndarray) -> np.ndarray:
-    """Compute a fixed-length feature vector from complex I/Q samples."""
-    x = np.asarray(iq_samples)
-    amplitude = np.abs(x)
-    phase = np.unwrap(np.angle(x))
-    inst_freq = np.diff(phase)
+def extract_features(iq_sample):
+    """
+    iq_sample: shape (2, N) -> [I, Q]
+    returns: 1D feature vector
+    """
+    I, Q = iq_sample[0], iq_sample[1]
+    complex_sig = I + 1j * Q
+    amp = np.abs(complex_sig)
+    phase = np.unwrap(np.angle(complex_sig))
 
-    mean_amp = np.mean(amplitude)
-    std_amp = np.std(amplitude)
-    kurt_amp = kurtosis(amplitude, fisher=False)
+    amp_norm = amp / (np.mean(amp) + 1e-9)
 
-    mean_phase = np.mean(phase)
-    std_phase = np.std(phase)
-    std_freq = np.std(inst_freq) if len(inst_freq) > 0 else 0.0
-
-    m2 = np.abs(np.mean(x ** 2))
-    m4 = np.abs(np.mean(x ** 4))
-    m6 = np.abs(np.mean(x ** 6))
-
-    m2_full = np.mean(np.abs(x) ** 2)
-    m4_full = np.mean(np.abs(x) ** 4)
-    c20 = np.abs(np.mean(x ** 2))
-    c40 = np.abs(np.mean(x ** 4) - 3 * np.mean(x ** 2) ** 2)
-    c42 = np.abs(m4_full - np.abs(np.mean(x ** 2)) ** 2 - 2 * m2_full ** 2)
-
-    power = amplitude ** 2
-    papr = np.max(power) / np.mean(power) if np.mean(power) > 0 else 0.0
-
-    real_part = np.real(x)
-    zero_crossings = np.sum(np.diff(np.sign(real_part)) != 0)
-    zcr = zero_crossings / len(real_part)
-
-    return np.array([
-        mean_amp, std_amp, kurt_amp,
-        mean_phase, std_phase, std_freq,
-        m2, m4, m6,
-        c20, c40, c42,
-        papr, zcr,
-    ])
+    feats = [
+        np.mean(amp), np.std(amp), np.var(amp),
+        np.mean(amp_norm ** 2), np.mean(amp_norm ** 4),   # 2nd/4th moments
+        np.std(phase), np.mean(np.abs(phase)),
+        np.mean(I), np.std(I), np.mean(Q), np.std(Q),
+        np.max(amp) - np.min(amp),
+        np.mean(I ** 2 + Q ** 2),                          # avg power
+        kurtosis(amp), kurtosis(I), kurtosis(Q),
+        skewness(I), skewness(Q),
+    ]
+    return np.array(feats, dtype=np.float32)
 
 
-if __name__ == "__main__":
-    from signal_generator import generate_signal
-    sig = generate_signal("16QAM", n_symbols=500, snr_db=15, seed=1)
-    feats = extract_features(sig)
-    for name, val in zip(FEATURE_NAMES, feats):
-        print(f"{name:22s}: {val:.4f}")
+def kurtosis(x):
+    x = x - np.mean(x)
+    return np.mean(x ** 4) / (np.mean(x ** 2) ** 2 + 1e-9)
+
+
+def skewness(x):
+    x = x - np.mean(x)
+    return np.mean(x ** 3) / (np.mean(x ** 2) ** 1.5 + 1e-9)
+
+
+def extract_features_batch(X):
+    """X: shape (N, 2, samples) -> returns (N, num_features)"""
+    return np.array([extract_features(x) for x in X])
