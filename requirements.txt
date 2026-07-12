@@ -3,6 +3,5 @@ scipy
 scikit-learn
 matplotlib
 joblib
-tensorflow-cpu
 streamlit
 plotly
