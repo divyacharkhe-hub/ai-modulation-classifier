@@ -1,67 +1,78 @@
-# OFDM Communication System Simulation
+# AI-Based Automatic Modulation Classification (AMC)
 
-A Python simulation of an end-to-end **OFDM (Orthogonal Frequency Division Multiplexing)** transceiver — the core waveform technology behind 4G LTE and 5G NR. Built from scratch using NumPy (no telecom libraries), demonstrating a full understanding of the physical layer signal chain.
-
-## What it does
-
-The simulation implements the complete chain:
-
-```
-Random Bits → 16-QAM Modulation → IFFT (OFDM) → Cyclic Prefix
-→ Wireless Channel (AWGN / Rayleigh Fading) → Remove CP → FFT
-→ 16-QAM Demodulation → BER Calculation
-```
-
-It then evaluates system performance across a range of SNR values and produces:
-
-- **BER vs SNR curve** comparing AWGN and Rayleigh fading channels
-- **Constellation diagram** showing received symbol scatter at a given SNR
-
-## Key concepts demonstrated
-
-- Digital modulation (16-QAM) and constellation mapping
-- OFDM subcarrier multiplexing via IFFT/FFT
-- Cyclic prefix insertion (inter-symbol interference mitigation)
-- Wireless channel modeling: AWGN and Rayleigh flat fading
-- Channel equalization (ideal CSI)
-- Bit Error Rate (BER) performance analysis — the standard metric used to evaluate real communication systems
-
-## How to run
-
-**On Replit:** Just click **Run** — dependencies install automatically from `requirements.txt`.
-
-**Locally:**
-```bash
-pip install -r requirements.txt
-python main.py
-```
-
-## Output
-
-Running the script prints per-SNR BER values to the console and saves two plots:
-
-- `ber_vs_snr.png` — BER performance curve
-- `constellation.png` — received signal constellation at 15 dB SNR
-
-## System parameters
-
-| Parameter | Value |
-|---|---|
-| Subcarriers (FFT size) | 64 |
-| Cyclic Prefix length | 16 |
-| Modulation | 16-QAM |
-| OFDM symbols simulated | 500 per SNR point |
-| SNR range | 0–24 dB |
-
-These can be changed at the top of `main.py`.
-
-## Possible extensions
-
-- Add channel coding (convolutional / LDPC) for coded BER comparison
-- Implement pilot-based channel estimation instead of ideal CSI
-- Extend to a simple 2x2 MIMO configuration
-- Support other modulation orders (QPSK, 64-QAM) for adaptive modulation demo
+Deep learning / ML system that takes raw I/Q signal samples and predicts
+whether the modulation is **BPSK, QPSK, 16-QAM, or 64-QAM** — across a
+range of noisy (AWGN) SNR conditions.
 
 ## Why this project
+- Direct extension of an OFDM/signal-processing background — pairs well
+  with a wireless-communications publication on a resume.
+- Pure Python, no hardware required.
+- Combines classical DSP/EE knowledge with a modern ML/DL pipeline —
+  exactly the "core + AI" combo companies in 5G/6G, defense, and
+  research value.
 
-This project was built to demonstrate practical understanding of physical-layer wireless communication concepts (modulation, OFDM, fading channels, and performance analysis) that underpin real-world 4G/5G systems — relevant for roles in telecom, wireless R&D, and signal processing.
+## Project structure
+amc_project/
+├── data_gen.py          # generates synthetic I/Q dataset (BPSK/QPSK/16QAM/64QAM + AWGN)
+├── features.py           # hand-crafted statistical features (moments, cumulants)
+├── train_rf.py            # Random Forest baseline (classical ML)
+├── train_cnn.py            # 1D-CNN deep learning model (raw I/Q -> class)
+├── evaluate.py              # accuracy-vs-SNR curve + confusion matrix
+├── streamlit_app.py          # live interactive demo (generate signal, see prediction)
+└── data/                       # generated dataset, trained models, plots (created at runtime)
+## Setup
+```bash
+pip install numpy scipy scikit-learn matplotlib joblib tensorflow-cpu streamlit plotly
+```
+
+## Run order
+```bash
+# 1. Generate the dataset (BPSK/QPSK/16QAM/64QAM, SNR -10 to 20 dB)
+python3 data_gen.py
+
+# 2. Baseline: classical ML on statistical features
+python3 train_rf.py
+
+# 3. Upgrade: deep learning on raw I/Q sequences
+python3 train_cnn.py
+
+# 4. Evaluate — generates accuracy-vs-SNR plot + confusion matrix
+python3 evaluate.py --model rf
+python3 evaluate.py --model cnn
+
+# 5. Live demo for recruiters
+streamlit run streamlit_app.py
+```
+
+## Results so far
+- Random Forest with higher-order moments (M2/M4/M6) + cumulants
+  (C20/C21/C40/C41/C42/C60/C63) + classical amplitude/phase/frequency
+  stats: **~65% overall accuracy** across all SNRs -10dB to 20dB.
+  - BPSK: ~90% precision (very distinguishable — real-valued constellation)
+  - QPSK: ~70% precision
+  - 16-QAM vs 64-QAM: ~49-50% each — these two are the confusable
+    pair. This matches real AMC literature: higher-order QAM schemes
+    are genuinely harder to separate, especially at low-to-moderate SNR.
+  - `C20_norm` (a cumulant feature) turned out to be the single most
+    important feature for the model.
+- 1D-CNN (raw I/Q): ~60% in an untuned first pass — more epochs and a
+  bigger dataset would push this further.
+- Accuracy predictably rises as SNR increases.
+
+## Ideas to extend
+1. Add Rayleigh/Rician fading, carrier frequency offset (CFO).
+2. Try LSTM or Transformer on raw I/Q instead of CNN.
+3. Add more modulation classes: 8-PSK, GFSK, etc.
+4. Two-stage classifier to better separate 16-QAM vs 64-QAM.
+
+## How to list this on your resume
+> **AI-Based Automatic Modulation Classification for Wireless Signals**
+> Built an end-to-end pipeline to classify BPSK/QPSK/16-QAM/64-QAM
+> signals from raw I/Q data under AWGN noise; compared a classical ML
+> baseline (Random Forest, higher-order cumulant features) against a
+> 1D-CNN deep learning model, and visualized accuracy-vs-SNR
+> performance trends; deployed a live interactive Streamlit demo.
+
+Pairs naturally with an IJARSCT signal-processing paper — same domain,
+shows application of modern AI tools to the same class of problem.
